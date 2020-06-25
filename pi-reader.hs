@@ -5,10 +5,9 @@
 --      value = sequence of digits
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 
 import System.IO
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 import Data.List
 import Control.Monad
 import TrieNode as TN
@@ -20,32 +19,42 @@ main = do
     firstChar <- hGetChar handle
     firstChar <- hGetChar handle
 
-    pi_1million <- TIO.hGetContents handle
+    pi_1million <- hGetContents handle
 
     print "Building pi trie..."
-    let pieceofpi = T.take 400000 pi_1million
-        piTrie = buildTrie pieceofpi 0 TN.empty
+    let !pieceofpi = take 800000 pi_1million
+        !piTrie = buildTrie pieceofpi
 
     forever $ do
         putStr "Enter a sequence of up to 6 digits:"
         seq <- getLine
-        print . reverse $ getRing seq piTrie
+        --print . reverse $ getRing seq piTrie
+        print $ getIndex seq piTrie
 
     hClose handle
 
-buildTrie :: T.Text -> Integer -> TrieNode String -> TrieNode String
-buildTrie pi i trie =
-  if T.null pi
-  then trie
-  else buildTrie (T.tail pi) (i+1) (addNodes pi i trie)
+buildTrie :: String -> TrieNode String
+buildTrie pi = let result = foldl' build (TN.empty, pi, 0) pi in first result
   where
-    addNodes :: T.Text -> Integer -> TrieNode String -> TrieNode String
-    addNodes t = insertAll [ T.take size t | size <- [1..6] ]
+    build :: (TrieNode String, String, Int) -> Char -> (TrieNode String, String, Int)
+    build (!trie, !leftOverPi, i) _ = (addNodes leftOverPi i trie, tail leftOverPi, i+1)
 
-    insertAll :: [T.Text] -> Integer -> TrieNode String -> TrieNode String
-    insertAll ts i trie' = foldl textToNode trie' ts
+    addNodes :: String -> Int -> TrieNode String -> TrieNode String
+    addNodes leftOverPi i !trie = insertAll [ take size leftOverPi | size <- [1..6] ] i trie
 
-    textToNode trie' t = TN.insert (T.unpack t) (show i) trie'
+    insertAll :: [String] -> Int -> TrieNode String -> TrieNode String
+    insertAll piecesOfPi i !trie' = foldl textToNode trie' piecesOfPi
+        where
+            textToNode !trie' pieceOfPi = TN.insert pieceOfPi (show i) trie'
+
+    first :: (a, b, c) -> a
+    first (a, _, _) = a
+
+getIndex :: String -> TrieNode String -> String
+getIndex n trie =
+  case TN.get n trie of
+        Nothing  -> "Not found"
+        Just pos -> pos
 
 getRing :: String -> TrieNode String -> [String]
 getRing n trie = getRing' n [n]
